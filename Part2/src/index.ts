@@ -27,8 +27,8 @@ interface Ciphertext {
 
 // An EdDSA signature.
 interface Signature {
-  R8: BigInt[];
-  S: BigInt;
+  R8: bigint[];
+  S: bigint;
 }
 
 interface EdDSA {
@@ -59,7 +59,7 @@ const NOTHING_UP_MY_SLEEVE =
 /*
  * Convert a BigInt to a Buffer
  */
-const bigInt2Buffer = (i: BigInt): Buffer => {
+const bigInt2Buffer = (i: bigint): Buffer => {
   let hexStr = i.toString(16);
   while (hexStr.length < 64) {
     hexStr = '0' + hexStr;
@@ -238,7 +238,19 @@ const encrypt = async (
   sharedKey: EcdhSharedKey,
 ): Promise<Ciphertext> => {
   const mimc7 = await buildMimc7();
-  // [assignment] generate the IV, use Mimc7 to hash the shared key with the IV, then encrypt the plain text
+  const iv = mimc7.multiHash(plaintext);
+  const ciphertext: Ciphertext = {
+    iv: buf2Bigint(iv),
+    data: plaintext.map(
+      (e: bigint, i: number): bigint =>
+        BigInt(e) +
+        buf2Bigint(
+          mimc7.hash(buf2Bigint(sharedKey), buf2Bigint(iv) + BigInt(i)),
+        ),
+    ),
+  };
+
+  return ciphertext;
 };
 
 /*
@@ -249,7 +261,18 @@ const decrypt = async (
   ciphertext: Ciphertext,
   sharedKey: EcdhSharedKey,
 ): Promise<Plaintext> => {
-  // [assignment] use Mimc7 to hash the shared key with the IV, then descrypt the ciphertext
+  const mimc7 = await buildMimc7();
+
+  const plaintext: Plaintext = ciphertext.data.map(
+    (e: bigint, i: number): bigint => {
+      return (
+        BigInt(e) -
+        buf2Bigint(mimc7.hash(buf2Bigint(sharedKey), ciphertext.iv + BigInt(i)))
+      );
+    },
+  );
+
+  return plaintext;
 };
 
 export {
